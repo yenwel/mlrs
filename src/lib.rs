@@ -15,20 +15,14 @@ pub fn gini_index(class_value: &Array1<u64>,groups: &[Array2<f64>; 2]) -> f64
     let mut gini = 0.0;
     for class_val in class_value.iter()
     {
-		//println!("value {}", class_val);
         let class_val_f = *class_val as f64;
         for group in groups.iter().filter(|group| group.len_of(Axis(0)) > 0 )
         {
             let size = group.len_of(Axis(0));
-            //println!("size {}", size);
-            //println!("group sliced {}", group.slice(s![.., -1..]));
             let proportion = (group.slice(s![.., -1..]).iter().filter(|x| **x == class_val_f).count() as f64) / (size as f64);
-            //println!("proportion {}", proportion);
             gini += proportion * (1.0 - proportion);
-            //println!("gini {}", gini);
         }
     }
-    //println!("final gini {}", gini);
     gini
 }
 
@@ -36,13 +30,10 @@ pub fn test_split(index: isize, value: f64, dataset: &Array2<f64>) -> [Array2<f6
 {
     //slice on index, then generate indexes for value, then select index
     let dataset_index = dataset.slice(&[S,Si(index,Some(index+1),1)]);
-    //println!("dataset_index {}", dataset_index);
     let leftidx = Vec::from_iter(dataset_index.iter().enumerate().filter(|&(_,val)| *val < value).map(|(i,_)| i));
     let rightidx = Vec::from_iter(dataset_index.iter().enumerate().filter(|&(_,val)| *val >= value).map(|(i,_)| i));
     let left = dataset.select(Axis(0), &leftidx[..]); //convert vec to slice with range operator (it's not an array!)
-    //println!("left {}",left);
     let right = dataset.select(Axis(0), &rightidx[..]);
-    //println!("right {}",right);
     [
         left,
         right
@@ -70,9 +61,7 @@ pub fn get_split(dataset: &Array2<f64>) -> Split
     class_col.sort();
     class_col.dedup(); //get distinct values
     let class_values = arr1(&class_col.clone()[..]);
-    //println!("class_values {}",class_values);
     let colnum = (dataset.dim().1) - 1;
-    //println!("colnum {}",colnum);
     let mut b_index = 999;
     let mut b_value = 999.0;
     let mut b_score = 999.0;
@@ -83,9 +72,7 @@ pub fn get_split(dataset: &Array2<f64>) -> Split
         {
             let val = *row.iter().nth(index).unwrap();
             let groups = test_split(index as isize,val,&dataset);
-            //println!("groups {:?}", groups);
             let gini = gini_index(&class_values,&groups);
-            //println!("gini {}", gini);
             println!("X{} < {} Gini = {}",index+1, val, gini);
             if gini < b_score 
             {
@@ -95,7 +82,6 @@ pub fn get_split(dataset: &Array2<f64>) -> Split
                 b_groups = [groups[0].clone(),groups[1].clone()];
             }
         }
-        //println!("index {}",index);
     }
     Split::Res{
         index : b_index,
@@ -107,8 +93,6 @@ pub fn get_split(dataset: &Array2<f64>) -> Split
 pub fn to_terminal(group : &Array2<f64>) -> Node {
     let mut class_values = Vec::from_iter(group.slice(s![.., -1..]).iter().map(|x| *x as u64));
     class_values.sort();
-    //println!("{}",class_values.len());
-    //println!("{}",(class_values.len() / 2)); 
     match class_values.get((class_values.len() / 2))  //zero based index : +1 -1
     {
         Some(class) => { Node::Terminal(*class) }
@@ -121,7 +105,6 @@ pub fn split(node : Split, max_depth: u64, min_size: usize, depth: u64 ) -> Opti
     match node
     {
         Split::Res{ index, value, groups } => {
-            //println!("{}{}",index,value);
             let left = &groups[0];
             let right = &groups[1];
             println!("left {:?} right {:?}",left.dim(),right.dim());
@@ -175,7 +158,6 @@ pub fn split(node : Split, max_depth: u64, min_size: usize, depth: u64 ) -> Opti
             println!("already processed");
         }
     }
-    println!("{:?}",result);
     result
 }
 
@@ -183,10 +165,51 @@ pub fn build_tree(train : &Array2<f64>, max_depth: u64, min_size: usize) -> Opti
     split(get_split(train),max_depth, min_size, 1)
 }
 
+pub fn predict_row_tree(model: &Split, data : &Array1<f64> ) -> Option<u64> {
+    match *model
+    {
+        Split::Final{index, value, ref left, ref right} => {
+            match data.iter().nth(index as usize)
+            {
+                Some(rowval) => {
+                    if *rowval < value {
+                        match *left {
+                            Node::Decision(ref arc_split) => {predict_row_tree(&Arc::try_unwrap(arc_split.clone()).unwrap(), data)},
+                            Node::Terminal(class) => { Some(class) }
+                            Node::Empty => { None }
+                        }
+                    } else {
+                        match *right {
+                            Node::Decision(ref arc_split) => { predict_row_tree(&Arc::try_unwrap(arc_split.clone()).unwrap(), data) },
+                            Node::Terminal(class) => { Some(class) }
+                            Node::Empty => { None }
+                        }
+                    }
+                }
+                None => None
+            }
+        }
+        _ => None
+    }
+}
+
+pub fn predict_tree(model: &Split, data : &Array2<f64> ) -> Array1<Option<u64>> {
+    Array1::from_iter(
+        data
+            .outer_iter()
+            .map( |row| 
+                predict_row_tree(
+                    &model,
+                    &row.to_owned()
+                )
+            )
+    )
+}
+
 #[cfg(test)]
 mod tests {
-    use {gini_index,test_split,get_split,build_tree,Split,Node};
-    use ndarray::{arr1,arr2};
+    use {gini_index,test_split,get_split,build_tree,predict_tree,Split,Node};
+    use ndarray::{arr1,arr2,Array1};
     use std::sync::Arc;
 
     #[test]
@@ -281,12 +304,6 @@ mod tests {
 	                   [6.642287351,3.319983761,1.0]]))
         )
     }
-    
-    /*#[test]
-    fn tree_to_terminal()
-    {
-        assert_eq!(0,1)
-    }*/
     
     #[test]
     fn tree_build_depth_one()
@@ -429,13 +446,32 @@ mod tests {
         )
     }
 
-    /*#[test]
+    #[test]
     fn tree_predict()
     {
-        assert_eq!(0,1)
+        let prediction = predict_tree(
+                &Split::Final{ 
+                    index : 0, 
+                    value : 6.642287351, 
+                    left : Node::Terminal(0), 
+                    right : Node::Terminal(1) 
+                },
+                &arr2(&[[2.771244718,1.784783929,0.0],
+	                   [1.728571309,1.169761413,0.0],
+	                   [3.678319846,2.81281357,0.0],
+	                   [3.961043357,2.61995032,0.0],
+	                   [2.999208922,2.209014212,0.0],
+	                   [7.497545867,3.162953546,1.0],
+	                   [9.00220326,3.339047188,1.0],
+	                   [7.444542326,0.476683375,1.0],
+	                   [10.12493903,3.234550982,1.0],
+	                   [6.642287351,3.319983761,1.0]])
+        );
+        let predictionresult = Array1::from_iter((&[0,0,0,0,0,1,1,1,1,1]).iter().map(|x| Some(*x as u64)));
+        assert_eq!(prediction, predictionresult)
     }
 
-    #[test]
+    /*#[test]
     fn tree_case_bank_note()
     {
         assert_eq!(0,1)
