@@ -107,8 +107,8 @@ pub fn get_split(dataset: &Array2<f64>) -> Split
 pub fn to_terminal(group : &Array2<f64>) -> Node {
     let mut class_values = Vec::from_iter(group.slice(s![.., -1..]).iter().map(|x| *x as u64));
     class_values.sort();
-    println!("{}",class_values.len());
-    println!("{}",(class_values.len() / 2)); 
+    //println!("{}",class_values.len());
+    //println!("{}",(class_values.len() / 2)); 
     match class_values.get((class_values.len() / 2))  //zero based index : +1 -1
     {
         Some(class) => { Node::Terminal(*class) }
@@ -125,9 +125,9 @@ pub fn split(node : Split, max_depth: u64, min_size: usize, depth: u64 ) -> Opti
             let left = &groups[0];
             let right = &groups[1];
             println!("left {:?} right {:?}",left.dim(),right.dim());
-            if left.dim().0 == 0 || right.dim().0 == 0
+            if left.dim().0 < 2 || right.dim().0 < 2
             {   
-                let group = if left.dim().0 == 0 { right } else { left };
+                let group = if left.dim().0 < 2 { right } else { left };
                 result = Some(Split::Final{
                     index: index,
                     value: value,
@@ -176,6 +176,7 @@ pub fn split(node : Split, max_depth: u64, min_size: usize, depth: u64 ) -> Opti
             println!("already processed");
         }
     }
+    println!("{:?}",result);
     result
 }
 
@@ -369,25 +370,16 @@ mod tests {
     {
         assert_eq!(
             Some(
-                Split::Final {
-                    index: 0,
-                    value: 6.642287351,
+                Split::Final { 
+                    index: 0, 
+                    value: 6.642287351, 
                     left: Node::Decision(
                         Arc::new(
-                            Split::Final {
+                            Split::Final { 
                                 index: 0, 
                                 value: 2.771244718, 
                                 left: Node::Terminal(0), 
-                                right: Node::Decision(
-                                    Arc::new(
-                                        Split::Final { 
-                                            index: 0, 
-                                            value: 2.771244718, 
-                                            left: Node::Terminal(0), 
-                                            right: Node::Terminal(0) 
-                                        }
-                                    )
-                                )
+                                right: Node::Terminal(0) 
                             }
                         )
                     ), 
@@ -415,7 +407,7 @@ mod tests {
                                             right: Node::Terminal(1) 
                                         }
                                     )
-                                )
+                                ) 
                             }
                         )
                     )
