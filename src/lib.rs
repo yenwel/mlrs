@@ -127,12 +127,11 @@ pub fn split(node : Split, max_depth: u64, min_size: usize, depth: u64 ) -> Opti
             println!("left {:?} right {:?}",left.dim(),right.dim());
             if left.dim().0 < 2 || right.dim().0 < 2
             {   
-                let group = if left.dim().0 < 2 { right } else { left };
                 result = Some(Split::Final{
                     index: index,
                     value: value,
-                    left: to_terminal(group),
-                    right: to_terminal(group)
+                    left: if left.dim().0 == 0 { to_terminal(right) } else { to_terminal(left) },
+                    right: if right.dim().0 == 0 { to_terminal(left) } else { to_terminal(right) }
                 });
             }
             else if depth >= max_depth
