@@ -9,7 +9,7 @@ extern crate ndarray;
 use ndarray::{Array1,Array2,Axis,S,Si,arr1,arr2};
 use std::iter::FromIterator;
 use std::sync::Arc;
-use std::borrow::Borrow;
+use std::cmp::Ordering::Equal;
 
 pub fn gini_index(class_value: &Array1<u64>,groups: &[Array2<f64>; 2]) -> f64
 {
@@ -18,21 +18,21 @@ pub fn gini_index(class_value: &Array1<u64>,groups: &[Array2<f64>; 2]) -> f64
         .iter()
         .map(|class_val| *class_val as f64)
         .flat_map(|class_val|
-                groups
-                    .iter()
-                    .filter(|group| group.len_of(Axis(0)) > 0 )
-                    .map(move |group| 
-                        {
-                            (group
-                                .slice(s![.., -1..])
-                                .iter()
-                                .filter(|x| **x == class_val)
-                                .count() as f64) 
-                            / 
-                            (group.len_of(Axis(0)) as f64)
-                        }
-                    )
-                    .map(|proportion| proportion * (1.0 - proportion))
+            groups
+                .iter()
+                .filter(|group| group.len_of(Axis(0)) > 0 )
+                .map(move |group| 
+                    {
+                        (group
+                            .slice(s![.., -1..])
+                            .iter()
+                            .filter(|x| **x == class_val)
+                            .count() as f64) 
+                        / 
+                        (group.len_of(Axis(0)) as f64)
+                    }
+                )
+                .map(|proportion| proportion * (1.0 - proportion))
         )
         .sum()
 }
@@ -99,6 +99,23 @@ pub fn get_split(dataset: &Array2<f64>) -> Split
         value : b_value,
         groups : b_groups
     }
+    //https://www.reddit.com/r/rust/comments/29kia3/no_ord_for_f32/
+    /*let mut gini_vec = Vec::from_iter(
+        (0..colnum)
+            .flat_map(|index|
+                dataset
+                    .outer_iter()
+                    .map(move |row| *row.iter().nth(index).unwrap() )
+                    .map(move |val| (val, test_split(index as isize,val,&dataset)))
+                    .map(move |(val,groups)| (index as isize, val, groups[0], groups[1] , gini_index(&class_values, &groups)))
+            )
+    );
+    gini_vec.sort_by(|a,b| (a.4).partial_cmp(&b.4).unwrap_or(Equal));
+    match gini_vec.first()
+    {
+        Some(max) => Split::Res{ index : max.0, value : max.1, groups : [max.2,max.3]},
+        None => Split::Res { index : 999, value: 999.0, groups : [arr2(&[[]]),arr2(&[[]])]}
+    }*/
 }
 
 pub fn to_terminal(group : &Array2<f64>) -> Node {
@@ -112,7 +129,6 @@ pub fn to_terminal(group : &Array2<f64>) -> Node {
 }
 
 pub fn split(node : Split, max_depth: u64, min_size: usize, depth: u64 ) -> Option<Split> {
-    let mut result : Option<Split> = None;
     match node
     {
         Split::Res{ index, value, groups } => {
@@ -121,55 +137,35 @@ pub fn split(node : Split, max_depth: u64, min_size: usize, depth: u64 ) -> Opti
             println!("left {:?} right {:?}",left.dim(),right.dim());
             if left.dim().0 < 2 || right.dim().0 < 2
             {   
-                result = Some(Split::Final{
+                Some(Split::Final{
                     index: index,
                     value: value,
                     left: if left.dim().0 == 0 { to_terminal(right) } else { to_terminal(left) },
                     right: if right.dim().0 == 0 { to_terminal(left) } else { to_terminal(right) }
-                });
+                })
             }
             else if depth >= max_depth
             {
-                result = Some(Split::Final{
+               Some(Split::Final{
                     index: index,
                     value: value,
                     left: to_terminal(left),
                     right: to_terminal(right)
-                });
+                })
             }
             else {
-                let mut node_left : Node = Node::Empty;
-                let mut node_right : Node = Node::Empty;
-                //process left child
-                if left.dim().1  <= min_size {
-                    node_left = to_terminal(left);
-                }
-                else {
-                    let node_left_result = get_split(left);
-                    node_left = Node::Decision(Arc::new(split(node_left_result, max_depth, min_size, depth + 1).unwrap()));
-                }
-                //process right child
-                if right.dim().1  <= min_size {
-                    node_right = to_terminal(right);
-                }
-                else {
-                    let node_right_result = get_split(right);
-                    node_right = Node::Decision(Arc::new(split(node_right_result, max_depth, min_size, depth + 1).unwrap()));
-                }
-
-                result = Some(Split::Final{
+                Some(Split::Final{
                     index: index,
                     value: value,
-                    left: node_left,
-                    right: node_right
-                });
+                    left: if left.dim().1 <= min_size { to_terminal(left) } else { Node::Decision(Arc::new(split(get_split(left), max_depth, min_size, depth + 1).unwrap())) },
+                    right: if right.dim().1 <= min_size { to_terminal(right) } else { Node::Decision(Arc::new(split(get_split(right), max_depth, min_size, depth + 1).unwrap())) }
+                })
             }
         }
         _ => {
-            println!("already processed");
+            None
         }
     }
-    result
 }
 
 pub fn build_tree(train : &Array2<f64>, max_depth: u64, min_size: usize) -> Option<Split> {
