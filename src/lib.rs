@@ -9,21 +9,32 @@ extern crate ndarray;
 use ndarray::{Array1,Array2,Axis,S,Si,arr1,arr2};
 use std::iter::FromIterator;
 use std::sync::Arc;
+use std::borrow::Borrow;
 
 pub fn gini_index(class_value: &Array1<u64>,groups: &[Array2<f64>; 2]) -> f64
 {
-    let mut gini = 0.0;
-    for class_val in class_value.iter()
-    {
-        let class_val_f = *class_val as f64;
-        for group in groups.iter().filter(|group| group.len_of(Axis(0)) > 0 )
-        {
-            let size = group.len_of(Axis(0));
-            let proportion = (group.slice(s![.., -1..]).iter().filter(|x| **x == class_val_f).count() as f64) / (size as f64);
-            gini += proportion * (1.0 - proportion);
-        }
-    }
-    gini
+    //http://techqa.info/programming/question/33600843/borrow-check-error-with-variable-not-living-long-enough-in-nested-lambda
+    class_value
+        .iter()
+        .map(|class_val| *class_val as f64)
+        .flat_map(|class_val|
+                groups
+                    .iter()
+                    .filter(|group| group.len_of(Axis(0)) > 0 )
+                    .map(move |group| 
+                        {
+                            (group
+                                .slice(s![.., -1..])
+                                .iter()
+                                .filter(|x| **x == class_val)
+                                .count() as f64) 
+                            / 
+                            (group.len_of(Axis(0)) as f64)
+                        }
+                    )
+                    .map(|proportion| proportion * (1.0 - proportion))
+        )
+        .sum()
 }
 
 pub fn test_split(index: isize, value: f64, dataset: &Array2<f64>) -> [Array2<f64>; 2]
