@@ -2,11 +2,23 @@ extern crate utah;
 #[macro_use] // ! macro before crate it applies!!!
 extern crate ndarray;
 
+//CART
 //http://archive.ics.uci.edu/ml/datasets/banknote+authentication
 //http://machinelearningmastery.com/implement-decision-tree-algorithm-scratch-python/
+
+//SVM
+//http://tullo.ch/articles/svm-py/
+//https://github.com/cran/e1071/blob/master/src/svm.cpp
+//https://en.wikipedia.org/wiki/Sequential_minimal_optimization
+//http://ttic.uchicago.edu/~nati/Publications/PegasosMPB.pdf
+//https://varcity.ethz.ch/paper/cvpr2016_li_fastsvmplus.pdf
+//https://www.quora.com/Why-is-Support-vector-Machine-hard-to-code-from-scratch-where-Logistic-Regression-is-not
+
+//NN
+//http://www.wildml.com/2015/09/implementing-a-neural-network-from-scratch/
 // TODO remove mut and unwrap and other bad stuff
 
-use ndarray::{Array1,Array2,Axis,S,Si,arr1,arr2};
+use ndarray::{Array1,Array2,Axis,S,Si,arr1,arr2,Zip};
 use std::iter::FromIterator;
 use std::sync::Arc;
 use std::cmp::Ordering::Equal;
@@ -211,6 +223,23 @@ pub fn predict_tree(model: &Split, data : &Array2<f64> ) -> Array1<Option<u64>> 
                 )
             )
     )
+}
+
+pub fn svm_cost_pegasos(x: &Array2<f64>,y: &Array1<i8>,lambda: f64, iterations: u64) -> Array1<f64> {
+    let mut w = Array1::<f64>::zeros((x.dim().1));
+    let mut t : f64 = 1.0;
+    for i in 1..iterations {
+        for tau in (0..(x.dim().0 - 1)).map(|tau| tau as isize){
+            /*let x_dot_w = x.slice(&[Si(tau,Some(tau+1),1),S]).dot(&w);
+            if y.get((tau as usize)).unwrap() * x_dot_w < 1 {
+                Zip::from(&mut w).and(x.slice(&[Si(tau,Some(tau+1),1),S])).and_broadcast(y.get(tau as usize)).apply(|mut wi,&xi,&yi| {
+                    *wi = (1.0-1.0/t) * wi + 1.0/(lambda * t ) * yi
+                });
+            }
+            t += 1.0;*/
+        }
+    }
+    w
 }
 
 #[cfg(test)]
