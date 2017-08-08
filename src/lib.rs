@@ -25,6 +25,8 @@ extern crate ndarray;
 // * bagging and boosting
 // * quadratic programming optimization?
 // * organize libs and crates
+// * serialize and deserialize trained models (RON, PMML?),
+// * distributed computation?
 
 use ndarray::{Array1,Array2,Axis,S,Si,arr1,arr2};
 use std::iter::FromIterator;
