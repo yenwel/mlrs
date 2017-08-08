@@ -1,4 +1,4 @@
-extern crate utah;
+//extern crate utah;
 #[macro_use] // ! macro before crate it applies!!!
 extern crate ndarray;
 
@@ -16,12 +16,19 @@ extern crate ndarray;
 
 //NN
 //http://www.wildml.com/2015/09/implementing-a-neural-network-from-scratch/
-// TODO remove mut and unwrap and other bad stuff
+// TODO 
+// * remove mut and handle instead of unwrap and other bad stuff
+// * make types for categorical, nominal etc
+// * model trait or other abstraction
+// * add regression
+// * add kernels to svm
+// * bagging and boosting
+// * quadratic programming optimization?
+// * organize libs and crates
 
-use ndarray::{Array1,Array2,Axis,S,Si,arr1,arr2,Zip};
+use ndarray::{Array1,Array2,Axis,S,Si,arr1,arr2};
 use std::iter::FromIterator;
 use std::sync::Arc;
-use std::cmp::Ordering::Equal;
 
 pub fn gini_index(class_value: &Array1<u64>,groups: &[Array2<f64>; 2]) -> f64
 {
@@ -227,16 +234,19 @@ pub fn predict_tree(model: &Split, data : &Array2<f64> ) -> Array1<Option<u64>> 
 
 pub fn svm_cost_pegasos(x: &Array2<f64>,y: &Array1<i8>,lambda: f64, iterations: u64) -> Array1<f64> {
     let mut w = Array1::<f64>::zeros((x.dim().1));
-    let mut t : f64 = 1.0;
-    for i in 1..iterations {
+    let mut t = 1.0;
+    for _ in 1..iterations {
         for tau in (0..(x.dim().0 - 1)).map(|tau| tau as isize){
-            /*let x_dot_w = x.slice(&[Si(tau,Some(tau+1),1),S]).dot(&w);
-            if y.get((tau as usize)).unwrap() * x_dot_w < 1 {
-                Zip::from(&mut w).and(x.slice(&[Si(tau,Some(tau+1),1),S])).and_broadcast(y.get(tau as usize)).apply(|mut wi,&xi,&yi| {
-                    *wi = (1.0-1.0/t) * wi + 1.0/(lambda * t ) * yi
-                });
+            let ytau = *y.get((tau as usize)).unwrap() as f64;
+            let xtau = x.slice(&[Si(tau,Some(tau+1),1),S]).subview(Axis(0),0).to_owned();
+            if  ytau * xtau.dot(&w) < 1.0 {
+                w = (1.0-1.0/t) * w + 1.0/(lambda*t)*ytau*xtau;
             }
-            t += 1.0;*/
+            else
+            {
+                w = (1.0-1.0/t) * w
+            }
+            t += 1.0;
         }
     }
     w
@@ -244,7 +254,7 @@ pub fn svm_cost_pegasos(x: &Array2<f64>,y: &Array1<i8>,lambda: f64, iterations: 
 
 #[cfg(test)]
 mod tests {
-    use {gini_index,test_split,get_split,build_tree,predict_tree,Split,Node};
+    use {gini_index,test_split,get_split,build_tree,predict_tree,svm_cost_pegasos,Split,Node};
     use ndarray::{arr1,arr2,Array1};
     use std::sync::Arc;
 
@@ -506,11 +516,21 @@ mod tests {
         let predictionresult = Array1::from_iter((&[0,0,0,0,0,1,1,1,1,1]).iter().map(|x| Some(*x as u64)));
         assert_eq!(prediction, predictionresult)
     }
-
-    /*#[test]
-    fn tree_case_bank_note()
-    {
-        assert_eq!(0,1)
-    }*/
     
+    #[test]
+    fn svm_cost_pegasos_w()
+    {
+        assert_eq!(
+            arr1(&[0.15617619723045267, -0.12323605735802477]),
+            svm_cost_pegasos(&arr2(&[[2.771244718,1.784783929],
+	                   [1.728571309,1.169761413],
+	                   [3.678319846,2.81281357],
+	                   [3.961043357,2.61995032],
+	                   [2.999208922,2.209014212],
+	                   [7.497545867,3.162953546],
+	                   [9.00220326,3.339047188],
+	                   [7.444542326,0.476683375],
+	                   [10.12493903,3.234550982],
+	                   [6.642287351,3.319983761]]),&arr1(&[-1,-1,-1,-1,-1,1,1,1,1,1]),3.0,10))
+    }    
 }
