@@ -16,6 +16,7 @@ extern crate ndarray;
 
 //NN
 //http://www.wildml.com/2015/09/implementing-a-neural-network-from-scratch/
+
 // TODO 
 // * remove mut and handle instead of unwrap and other bad stuff
 // * make types for categorical, nominal etc
@@ -252,6 +253,17 @@ pub fn svm_cost_pegasos(x: &Array2<f64>,y: &Array1<i8>,lambda: f64, iterations: 
         }
     }
     w
+}
+
+pub fn nn_calculate_loss(x: &Array2<f64>, y: &Array1<f64>, w1: &Array1<f64>, b1 : &Array1<f64>,w2: &Array1<f64>, b2 : &Array1<f64>) -> f64
+{
+    let z1 : Array1<f64> = x.dot(w1) + b1;
+    let a1 : Array1<f64> = Array1::from_iter(z1.iter().map(|z1s| z1s.tanh()));
+    let z2 : Array1<f64> = a1 * w2 + b2;
+    let exp_scores = Array1::from_iter(z2.iter().map(|z2s| z2s.exp()));
+    let exp_score_sum : f64 = exp_scores.iter().sum();
+    let probs : Array1<f64> = Array1::from_iter(exp_scores.iter().map(|exp_score| exp_score / exp_score_sum ));
+    0.0
 }
 
 #[cfg(test)]
